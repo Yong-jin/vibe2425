@@ -11,15 +11,19 @@ export type MovieResult = {
   audiAcc: string | null;
 };
 export type BoxofficeResult = {
-  status: "ok" | "empty";
-  mode: "demo";
-  source: "fixture";
-  queryDate: string;
-  periodType: PeriodType;
-  periodStart: string;
-  periodEnd: string;
-  items: MovieResult[];
-  warnings: string[];
+  data: { items: MovieResult[] };
+  meta: {
+    status: "ok" | "empty";
+    mode: "demo";
+    source: "fixture";
+    queryDate: string;
+    periodType: PeriodType;
+    periodStart: string;
+    periodEnd: string;
+    fetchedAt: string;
+    expiresAt: null;
+    warnings: string[];
+  };
 };
 
 export function validatedInteger(value: unknown): string | null {

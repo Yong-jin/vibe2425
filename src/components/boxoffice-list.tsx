@@ -7,6 +7,13 @@ type Query = { date: string; type: PeriodType; scenario: DemoScenario; retry: nu
 type View = { query: Query; status: "loading" } | { query: Query; status: "error"; message: string } | { query: Query; status: "ready"; result: BoxofficeResult };
 const labels = { daily: "일간", weekly: "주간", weekend: "주말" };
 
+function formatCollectedAt(value: string): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(new Date(value));
+}
+
 export default function BoxofficeList({ mode }: { mode: string }) {
   const [query, setQuery] = useState<Query>({ date: "2026-09-13", type: "daily", scenario: "normal", retry: 0 });
   const [search, setSearch] = useState("");
@@ -17,7 +24,7 @@ export default function BoxofficeList({ mode }: { mode: string }) {
     fetch(`/api/boxoffice?${params}`, { signal: controller.signal, cache: "no-store" })
       .then(async (response) => {
         const body = await response.json();
-        if (!response.ok) throw new Error(body.message ?? "데이터를 불러오지 못했습니다.");
+        if (!response.ok) throw new Error(body.error?.message ?? "데이터를 불러오지 못했습니다.");
         if (!controller.signal.aborted) setView({ query, status: "ready", result: body });
       })
       .catch((error: unknown) => {
@@ -29,7 +36,7 @@ export default function BoxofficeList({ mode }: { mode: string }) {
   const changeQuery = (patch: Partial<Query>) => setQuery({ ...query, ...patch });
   const loading = view.query !== query || view.status === "loading";
   const result = !loading && view.status === "ready" ? view.result : null;
-  const items = result?.items.filter((movie) => movie.movieNm.includes(search.trim())) ?? [];
+  const items = result?.data.items.filter((movie) => movie.movieNm.includes(search.trim())) ?? [];
 
   return (
     <section>
@@ -52,12 +59,19 @@ export default function BoxofficeList({ mode }: { mode: string }) {
       <div aria-live="polite" aria-busy={loading} className="results">
         {loading ? <div className="state-card" role="status"><span className="spinner" /><h2>박스오피스 데이터를 불러오는 중입니다.</h2><p>조회 조건에 맞는 목록을 준비하고 있습니다.</p></div>
           : view.status === "error" ? <div className="state-card error" role="alert"><h2>조회 오류</h2><p>{view.message}</p><button onClick={() => changeQuery({ retry: query.retry + 1 })}>다시 시도</button>{query.scenario === "error" && <button className="secondary" onClick={() => changeQuery({ scenario: "normal" })}>정상 응답으로 복구</button>}</div>
-          : result?.status === "empty" ? <div className="state-card"><h2>선택한 기간의 박스오피스 데이터가 없습니다.</h2><p>다른 날짜나 기간을 선택해 주세요.</p><button onClick={() => changeQuery({ date: "2026-09-13" })}>샘플 날짜로 돌아가기</button></div>
-          : result && items.length === 0 ? <div className="state-card"><h2>검색어와 일치하는 영화가 없습니다.</h2><p>현재 조회 목록 안에서 검색합니다.</p><button onClick={() => setSearch("")}>검색어 초기화</button></div>
+          : result?.meta.status === "empty" ? <div className="state-card"><h2>선택한 기간의 박스오피스 데이터가 없습니다.</h2><p>조회는 정상적으로 완료되었습니다. 해당 기간에 등록된 영화가 없습니다. 다른 날짜나 기간을 선택해 주세요.</p><button onClick={() => changeQuery({ date: "2026-09-13" })}>샘플 날짜로 돌아가기</button></div>
+          : result && items.length === 0 ? <div className="state-card"><h2>검색어와 일치하는 영화가 없습니다.</h2><p>조회된 영화 {result.data.items.length}편 중 검색어 ‘{search.trim()}’에 맞는 영화가 없습니다. 검색어를 바꾸거나 초기화해 주세요.</p><button onClick={() => setSearch("")}>검색어 초기화</button></div>
           : result ? <>
-            <div className="result-summary"><h2>{labels[query.type]} 박스오피스 · 조회 성공</h2><p>집계 기간: {result.periodStart} ~ {result.periodEnd} · {items.length}편</p></div>
+            <div className="result-summary">
+              <h2>{labels[result.meta.periodType]} 박스오피스 · 조회 성공</h2>
+              <div className="result-meta">
+                <p>집계 기간: {result.meta.periodStart} ~ {result.meta.periodEnd}</p>
+                <p>조회 건수: {result.data.items.length}건 · 표시: {items.length}건</p>
+                <p>출처: 가상 데이터 (fixture) · 가상 수집 시각: {formatCollectedAt(result.meta.fetchedAt)} KST</p>
+              </div>
+            </div>
             <div className="table-scroll"><table>
-              <caption>{result.queryDate} 기준 {labels[result.periodType]} 박스오피스 (가상 데이터)</caption>
+              <caption>{result.meta.queryDate} 기준 {labels[result.meta.periodType]} 박스오피스 (가상 데이터)</caption>
               <thead><tr>{["순위", "영화명", "개봉일", "매출(원)", "관객수(명)", "누적 관객수(명)"].map((title) => <th scope="col" key={title}>{title}</th>)}</tr></thead>
               <tbody>{items.map((movie) => <tr key={movie.movieCd}><td>{movie.rank}</td><th scope="row">{movie.movieNm}</th><td>{movie.openDt ?? "정보 없음"}</td><td className="number">{formatInteger(movie.salesAmt)}</td><td className="number">{formatInteger(movie.audiCnt)}</td><td className="number">{formatInteger(movie.audiAcc)}</td></tr>)}</tbody>
             </table></div>

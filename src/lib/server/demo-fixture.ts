@@ -3,6 +3,8 @@ import { periodFor, validatedInteger, type BoxofficeResult, type MovieResult, ty
 // KOBIS-shaped numeric strings; these are fictional, not real box-office figures.
 export const DEMO_START = "2026-09-07";
 export const DEMO_END = "2026-09-13";
+// A fictional collection time for the fixture, not a KOBIS fetch time.
+export const DEMO_FETCHED_AT = "2026-09-14T00:00:00+09:00";
 const movies = [
   { movieCd: "DEMO001", movieNm: "바다 너머의 약속", openDt: "2026-09-02", audiences: [1000, 1100, 1200, 1300, 2000, 3000, 2500], prior: 10000 },
   { movieCd: "DEMO002", movieNm: "서울의 별빛", openDt: "2026-09-03", audiences: [900, 1200, 1300, 1000, 1800, 2200, 2600], prior: 8000 },
@@ -51,8 +53,11 @@ export function getDemoBoxoffice(date: string, type: PeriodType): BoxofficeResul
     return sales !== 0n ? (sales > 0n ? 1 : -1) : audience !== 0n ? (audience > 0n ? 1 : -1) : a.movieCd.localeCompare(b.movieCd);
   }).map((movie, index) => ({ ...movie, rank: index + 1 }));
   return {
-    status: items.length ? "ok" : "empty", mode: "demo", source: "fixture",
-    queryDate: date, periodType: type, periodStart: period.start, periodEnd: period.end,
-    items, warnings: [],
+    data: { items },
+    meta: {
+      status: items.length ? "ok" : "empty", mode: "demo", source: "fixture",
+      queryDate: date, periodType: type, periodStart: period.start, periodEnd: period.end,
+      fetchedAt: DEMO_FETCHED_AT, expiresAt: null, warnings: [],
+    },
   };
 }
