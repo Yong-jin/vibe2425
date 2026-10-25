@@ -1,10 +1,12 @@
 # 영화 박스오피스 인사이트 대시보드 구현 계획
 
-상태: 구현 전 계획 / 기준: [PRD](../PRD.md), [아키텍처](../ARCHITECTURE.md), [작업 지침](../AGENTS.md), [데이터 모델](../ERD.md), [단계별 계획](../PLAN.md)
+상태: 단계별 구현 중 / 기준: [PRD](../PRD.md), [아키텍처](../ARCHITECTURE.md), [작업 지침](../AGENTS.md), [데이터 모델](../ERD.md), [단계별 계획](../PLAN.md)
+
+F2 구현 선택(2026-10-25): 날짜별 진행률·개별 재시도를 위해 화면은 기존 `GET /api/boxoffice?date=YYYY-MM-DD&type=daily`를 최대 4개씩 요청한다. 아래 `/api/insights` 계약은 초기 계획이며 현재 구현된 경로가 아니다. 화면의 실제 지표·완전성 정책·검산은 [INSIGHTS.md](./INSIGHTS.md)에 기록했다.
 
 ## 1. 현재 위치와 결정 기준
 
-Next.js(App Router)·TypeScript 실행 뼈대와 Vitest·Playwright가 있고, F1 목록 화면은 `DATA_MODE=demo`에서 2026-09-07~13 가상 데이터로 동작한다. `DATA_MODE=live`는 KOBIS 호출·검증과 세 테이블의 저장·캐시 경로를 구현했다. 실제 Supabase에서 첫 조회 `kobis` → 둘째 조회 `cache`와 `verify:data` 종료 코드 0을 확인했다. RLS 공개 접근·중간 실패 롤백의 격리 DB 검증은 남아 있다. F2는 준비 화면이다. 이 문서는 **남은 구현의 목표 계약**을 정의한다. F1의 `data / meta` 형식은 두 모드에 적용되었다.
+Next.js(App Router)·TypeScript 실행 뼈대와 Vitest·Playwright가 있고, F1 목록 화면은 `DATA_MODE=demo`에서 2026-09-07~13 가상 데이터로 동작한다. `DATA_MODE=live`는 KOBIS 호출·검증과 세 테이블의 저장·캐시 경로를 구현했다. 실제 Supabase에서 첫 조회 `kobis` → 둘째 조회 `cache`와 `verify:data` 종료 코드 0을 확인했다. RLS 공개 접근·중간 실패 롤백의 격리 DB 검증은 남아 있다. F2는 날짜별 요청·두 차트·두 보조 수치·개별 재시도 화면을 구현했다. 이 문서의 단일 `/api/insights` 계약 등은 **미구현 초기 계획**이며 현재 동작은 [INSIGHTS.md](./INSIGHTS.md)를 따른다. F1의 `data / meta` 형식은 두 모드에 적용되었다.
 
 - 제품 동작과 완료 판정은 PRD의 AC를 우선한다. 캐시·오류 흐름은 ARCHITECTURE.md를 따른다.
 - 저장 방식은 PLAN.md에서 채택한 **영화·조회 기간·기간별 실적 세 테이블**을 단일 데이터 기준으로 삼는다. ARCHITECTURE.md와 AGENTS.md도 이 결정에 맞췄다. 독립적인 JSONB 원본 캐시는 만들지 않는다.
