@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const useExistingServer = process.env.PLAYWRIGHT_USE_EXISTING_SERVER === "1";
-const baseURL = useExistingServer ? "http://127.0.0.1:3000" : "http://127.0.0.1:3100";
+const suppliedBaseURL = process.env.PLAYWRIGHT_BASE_URL;
+const useExistingServer = !!suppliedBaseURL || process.env.PLAYWRIGHT_USE_EXISTING_SERVER === "1";
+const baseURL = suppliedBaseURL ?? (useExistingServer ? "http://127.0.0.1:3000" : "http://127.0.0.1:3100");
 
 export default defineConfig({
   testDir: "./tests/e2e",

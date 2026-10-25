@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatInteger, koreaToday, type BoxofficeResult, type DemoScenario, type PeriodType } from "@/lib/boxoffice";
+import { formatInteger, isValidDate, koreaToday, type BoxofficeResult, type DemoScenario, type PeriodType } from "@/lib/boxoffice";
 
 type Query = { date: string; type: PeriodType; scenario: DemoScenario; retry: number };
 type View = { query: Query; status: "loading" } | { query: Query; status: "error"; message: string } | { query: Query; status: "ready"; result: BoxofficeResult };
@@ -34,7 +34,10 @@ export default function BoxofficeList({ mode, initialDate }: { mode: string; ini
     return () => controller.abort();
   }, [query, mode]);
 
-  const changeQuery = (patch: Partial<Query>) => setQuery({ ...query, ...patch });
+  const changeQuery = (patch: Partial<Query>) => setQuery((previous) => {
+    const next = { ...previous, ...patch };
+    return isValidDate(next.date) && next.date <= koreaToday() ? next : previous;
+  });
   const loading = view.query !== query || view.status === "loading";
   const result = !loading && view.status === "ready" ? view.result : null;
   const items = result?.data.items.filter((movie) => movie.movieNm.includes(search.trim())) ?? [];

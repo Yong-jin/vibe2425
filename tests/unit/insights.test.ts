@@ -68,6 +68,15 @@ describe("F2 observed Top 10 calculations", () => {
     expect(result.movies.map((movie) => movie.movieCd)).toEqual(["A", "C", "B"]);
   });
 
+  it("orders numeric strings by value and adds 900 plus 1000 as 1900", () => {
+    const result = calculateInsights([{ date: "2026-09-07", status: "ok", items: [
+      { movieCd: "LOW", movieNm: "작은 매출", salesAmt: "900", audiCnt: "1" },
+      { movieCd: "HIGH", movieNm: "큰 매출", salesAmt: "1000", audiCnt: "1" },
+    ] }]);
+    expect(result.salesAmt).toBe(1900n);
+    expect(result.movies.map((movie) => movie.movieCd)).toEqual(["HIGH", "LOW"]);
+  });
+
   it("hides period totals for empty, failed, or loading days and handles zero audience", () => {
     const valid = demoDay("2026-09-07");
     const partial = calculateInsights([valid, { date: "2026-09-08", status: "error" }, { date: "2026-09-09", status: "empty" }]);

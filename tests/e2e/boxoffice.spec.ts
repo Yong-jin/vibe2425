@@ -5,6 +5,11 @@ test("filters, search and empty responses have distinct states", async ({ page }
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.getByRole("row")).toHaveCount(4);
   await expect(page.getByRole("columnheader")).toHaveCount(6);
+  await expect(page.getByRole("columnheader", { name: "개봉일" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "누적 관객수(명)" })).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: "바다 너머의 약속" }).locator("..")).toContainText("2026-09-02");
+  await expect(page.getByRole("rowheader", { name: "바다 너머의 약속" }).locator("..")).toContainText("25,000,000");
+  await expect(page.getByRole("rowheader", { name: "바다 너머의 약속" }).locator("..")).toContainText("22,100");
   await expect(page.getByText("조회 건수: 3건 · 표시: 3건")).toBeVisible();
   await expect(page.getByText(/출처: 가상 데이터 \(fixture\) · 가상 수집 시각: .* KST/)).toBeVisible();
   await page.getByLabel("영화명 검색").fill(" 바다 ");
@@ -49,4 +54,17 @@ test("invalid API input is rejected and normal emptiness returns 200", async ({ 
   const empty = await request.get("/api/boxoffice?date=2026-09-06&type=daily");
   expect(empty.status()).toBe(200);
   expect(await empty.json()).toMatchObject({ data: { items: [] }, meta: { status: "empty", source: "fixture" } });
+});
+
+test("future date is blocked before a browser request", async ({ page }) => {
+  const futureRequests: string[] = [];
+  await page.route("**/api/boxoffice?**", async (route) => {
+    if (new URL(route.request().url()).searchParams.get("date") === "2099-01-01") futureRequests.push(route.request().url());
+    await route.continue();
+  });
+  await page.goto("/");
+  await expect(page.getByRole("table")).toBeVisible();
+  await page.getByLabel("조회 날짜").fill("2099-01-01");
+  await page.waitForTimeout(300);
+  expect(futureRequests).toHaveLength(0);
 });

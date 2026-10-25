@@ -19,6 +19,8 @@ test("shows exact daily observations, then keeps 14 and 30 day gaps", async ({ p
   await expect(page.locator(".day-list li").filter({ hasText: "2026-09-07" })).toContainText("0.25억 원");
   await expect(page.locator(".day-list li").filter({ hasText: "2026-09-08" })).toContainText("0.30억 원");
   await expect(page.getByText("관객당 관측 매출").locator("..") ).toContainText("10,000원/명");
+  await page.getByLabel("표시 개수").selectOption("10");
+  await expect(page.locator(".bar-chart li")).toHaveCount(3);
 
   await page.getByRole("button", { name: "14일" }).click();
   await expect(page.getByText("14/14일 완료")).toBeVisible();
@@ -31,6 +33,27 @@ test("shows exact daily observations, then keeps 14 and 30 day gaps", async ({ p
   await expect(page.getByText("30/30일 완료")).toBeVisible();
   await expect(page.getByText("정상 7", { exact: true })).toBeVisible();
   await expect(page.getByText("빈 날짜 23", { exact: true })).toBeVisible();
+});
+
+test("an entirely empty period differs from failed days", async ({ page }) => {
+  await page.goto("/insights");
+  await page.getByLabel("분석 종료일").fill("2026-09-06");
+  await expect(page.getByText("7/7일 완료")).toBeVisible();
+  await expect(page.getByText("빈 날짜 7", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "선택한 분석 기간에 표시할 데이터가 없습니다." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "분석 기간을 불러오지 못했습니다." })).toHaveCount(0);
+  await expect(page.locator(".bar-chart li")).toHaveCount(0);
+});
+
+test("all failed dates show an error state rather than empty data", async ({ page }) => {
+  await page.unrouteAll();
+  await page.route("**/api/boxoffice?**", (route) => route.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+  await page.goto("/insights");
+  await page.getByLabel("분석 종료일").fill("2026-09-13");
+  await expect(page.getByText("7/7일 완료")).toBeVisible();
+  await expect(page.getByText("실패 7", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "분석 기간을 불러오지 못했습니다." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "선택한 분석 기간에 표시할 데이터가 없습니다." })).toHaveCount(0);
 });
 
 test("retries only one failed date", async ({ page }) => {
