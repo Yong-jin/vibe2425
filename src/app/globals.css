@@ -29,6 +29,8 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px s
 .result-summary h2 { margin: 0; }
 .result-meta { display: flex; flex-direction: column; gap: 2px; }
 .result-meta p { margin: 0; font-size: .9rem; }
+.result-warnings { font-size: .9rem; color: #8b3f1c; }
+.result-warnings ul { margin: 4px 0 0; padding-left: 20px; }
 .table-scroll { overflow-x: auto; background: white; border: 1px solid #d9e2ee; border-radius: 12px; }
 table { border-collapse: collapse; width: 100%; white-space: nowrap; }
 caption { text-align: left; padding: 16px; color: #46556d; font-size: .9rem; }

@@ -13,15 +13,15 @@ export type MovieResult = {
 export type BoxofficeResult = {
   data: { items: MovieResult[] };
   meta: {
-    status: "ok" | "empty";
+    status: "ok" | "empty" | "partial";
     mode: "demo" | "live";
-    source: "fixture" | "kobis";
+    source: "fixture" | "kobis" | "cache" | "stale";
     queryDate: string;
     periodType: PeriodType;
     periodStart: string;
     periodEnd: string;
     fetchedAt: string;
-    expiresAt: null;
+    expiresAt: string | null;
     warnings: string[];
   };
 };

@@ -62,7 +62,10 @@ describe("KOBIS request and failure boundary", () => {
   });
   it("returns safe errors for invalid JSON, HTTP failure, and live-only demo options", async () => {
     vi.stubEnv("KOBIS_API_KEY", "fixture-key");
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("bad gateway", { status: 502 })));
+    vi.stubEnv("SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("SUPABASE_SECRET_KEY", "fixture-secret");
+    vi.stubGlobal("fetch", vi.fn(async (input: URL) => input.pathname.endsWith("read_box_office_period")
+      ? Response.json(null) : new Response("bad gateway", { status: 502 })));
     const upstream = await serveBoxoffice(new URLSearchParams({ date }), "live");
     expect(upstream.code).toBe(502);
     expect("error" in upstream.body && upstream.body.error.code).toBe("KOBIS_UPSTREAM_ERROR");

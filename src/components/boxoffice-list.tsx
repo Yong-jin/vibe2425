@@ -64,12 +64,12 @@ export default function BoxofficeList({ mode, initialDate }: { mode: string; ini
           : result && items.length === 0 ? <div className="state-card"><h2>검색어와 일치하는 영화가 없습니다.</h2><p>조회된 영화 {result.data.items.length}편 중 검색어 ‘{search.trim()}’에 맞는 영화가 없습니다. 검색어를 바꾸거나 초기화해 주세요.</p><button onClick={() => setSearch("")}>검색어 초기화</button></div>
           : result ? <>
             <div className="result-summary">
-              <h2>{labels[result.meta.periodType]} 박스오피스 · 조회 성공</h2>
+              <h2>{labels[result.meta.periodType]} 박스오피스 · {result.meta.source === "stale" ? "이전 자료" : "조회 성공"}</h2>
               <div className="result-meta">
                 <p>집계 기간: {result.meta.periodStart} ~ {result.meta.periodEnd}</p>
                 <p>조회 건수: {result.data.items.length}건 · 표시: {items.length}건</p>
-                <p>출처: {result.meta.source === "fixture" ? "가상 데이터 (fixture)" : "KOBIS"} · {result.meta.source === "fixture" ? "가상 수집 시각" : "조회 시각"}: {formatCollectedAt(result.meta.fetchedAt)} KST</p>
-                {result.meta.warnings.length > 0 && <p role="status">일부 값에 문제가 있어 ‘정보 없음’으로 표시했습니다. {result.meta.warnings.length}개 항목을 확인해 주세요.</p>}
+                <p>출처: {{ fixture: "가상 데이터 (fixture)", kobis: "KOBIS", cache: "저장된 데이터", stale: "이전 저장 데이터" }[result.meta.source]} · {result.meta.source === "fixture" ? "가상 수집 시각" : "마지막 성공 시각"}: {formatCollectedAt(result.meta.fetchedAt)} KST</p>
+                {result.meta.warnings.length > 0 && <div role="status" className="result-warnings"><strong>조회 안내</strong><ul>{result.meta.warnings.map((warning, index) => <li key={`${index}-${warning}`}>{warning}</li>)}</ul></div>}
               </div>
             </div>
             <div className="table-scroll"><table>

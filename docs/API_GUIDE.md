@@ -35,13 +35,13 @@
 | `salesAcc` | `salesAcc` | `boxoffice_results.sales_acc` | 위와 동일. 날짜별로 합산하지 않음 |
 | `audiAcc` | `audiAcc` | `boxoffice_results.audi_acc` | 위와 동일. 날짜별로 합산하지 않음 |
 | `showRange` | `meta.periodStart`, `meta.periodEnd` | `boxoffice_periods.period_start`, `period_end` | 날짜 형식과 요청 기간의 일치 여부 확인 |
-| 서버 수신 시각 | `meta.fetchedAt` | `boxoffice_periods.fetched_at` | 응답 파싱 성공 시 UTC ISO 문자열. 이번 단계에서는 DB에 저장하지 않음 |
+| 서버 수신 시각 | `meta.fetchedAt` | `boxoffice_periods.fetched_at` | 응답 파싱 성공 시 UTC ISO 문자열. 저장 RPC가 같은 키의 이전 시각과 비교 |
 
-큰 금액·관객수는 JavaScript `Number`로 바꾸지 않고 정수 문자열로 JSON에 전달한다. 정렬·합산이 필요한 다음 단계에서는 `BigInt`를 사용한다. 실제 `"0"`은 0으로 유지하며 누락·소수·음수·숫자형 JSON 값은 `null`과 품질 경고로 구분한다. DB 도입 시 `numeric(30,0)`에 저장하고 읽을 때 다시 문자열로 직렬화한다.
+큰 금액·관객수는 JavaScript `Number`로 바꾸지 않고 정수 문자열로 JSON에 전달한다. 정렬·합산에는 `BigInt`를 사용한다. 실제 `"0"`은 0으로 유지하며 누락·소수·음수·숫자형 JSON 값은 `null`과 품질 경고로 구분한다. DB의 `numeric(30,0)`에 저장하고 읽을 때 다시 문자열로 직렬화한다.
 
 ## 저장 전 검증과 오류
 
-현재는 **저장하지 않지만**, 동일한 검증을 통과한 데이터만 화면에 응답한다.
+같은 검증을 통과한 데이터만 화면에 응답하거나 DB에 저장한다.
 
 1. 내부 날짜가 실제 달력 날짜이고 한국 날짜 기준 미래가 아닌지, 유형이 세 값 중 하나인지 확인한다. `scenario`는 demo 전용이며 live에서는 거부한다.
 2. 외부 HTTP 성공 여부와 JSON 구조를 확인한다. `faultInfo`, 목록 누락, 잘못된 `showRange`, 10건 초과, 중복 `movieCd`는 정상 빈 응답으로 취급하지 않는다.
@@ -58,6 +58,40 @@
 | 외부 호출 4초 초과 | 504 | `KOBIS_TIMEOUT` | 요청 중단 후 시간 초과 안내 |
 | 정상 빈 목록 | 200 | 오류 없음, `meta.status=empty` | 날짜·기간 변경 안내 |
 
-성공 응답은 `{ data: { items }, meta: { status, mode, source, queryDate, periodType, periodStart, periodEnd, fetchedAt, expiresAt, warnings } }`다. live의 `source`는 `kobis`, `expiresAt`은 저장 전이므로 `null`이다. 실패 응답은 `{ error: { code, message }, meta: { status: "error", mode } }`이며 URL·인증값·외부 오류 객체는 포함하지 않는다.
+성공 응답은 `{ data: { items }, meta: { status, mode, source, queryDate, periodType, periodStart, periodEnd, fetchedAt, expiresAt, warnings } }`다. live의 `source`는 `kobis | cache | stale`이며 저장에 성공하면 `expiresAt`을 표시한다. 실패 응답은 `{ error: { code, message }, meta: { status: "error", mode } }`이며 URL·인증값·외부 오류 객체는 포함하지 않는다.
 
-`DATA_MODE=demo`는 기존 fixture만 읽으며 외부 호출을 하지 않는다. 이 모드의 2026-09-06은 정상 빈 결과다. `DATA_MODE=live`는 KOBIS를 직접 호출하며 같은 날짜의 실제 자료가 조회되었다. 저장·공유 캐시·호출 제한·동시 갱신 제어는 다음 B단계 작업이다. 그 전까지 live 요청마다 KOBIS를 호출하므로 운영 배포 전에 해당 제어를 구현해야 한다.
+`DATA_MODE=demo`는 기존 fixture만 읽으며 외부 호출을 하지 않는다. 이 모드의 2026-09-06은 정상 빈 결과다. `DATA_MODE=live`는 저장소의 유효 캐시를 먼저 읽고 누락·만료 시 KOBIS를 호출한다. 같은 날짜에 실제 자료가 있음을 B단계 이전의 직접 호출로 확인했다. 아래 DB 검증은 Supabase 설정 완료 후 수행한다.
+
+## Supabase 저장·캐시 (B단계)
+
+마이그레이션: [`supabase/migrations/202610250001_box_office_cache.sql`](../supabase/migrations/202610250001_box_office_cache.sql). 업무 데이터 기준은 **세 테이블뿐**이다. `movies`는 영화 코드·이름·개봉일, `boxoffice_periods`는 유형·기준일·실제 기간·상태·조회/만료 시각, `boxoffice_results`는 해당 기간의 영화별 순위·매출·관객 수치를 보관한다. 컬럼 이름과 타입은 ERD.md를 따른다.
+
+| SQL 부분 | 하는 일 |
+| --- | --- |
+| PK·FK·UNIQUE·CHECK | 한 기간의 영화가 중복되지 않게 하고 유효하지 않은 상태·음수 수치·잘못된 날짜 순서를 막는다. |
+| RLS·권한 회수 | 공개 `anon`·`authenticated` 사용자의 테이블 접근과 함수 실행을 차단한다. 서버의 `service_role`만 RPC를 호출한다. |
+| `save_box_office_period` | 같은 키에 트랜잭션 잠금을 건 뒤 영화 → 기간 → 실적 순서로 저장한다. 기존 실적을 모두 지우고 새 목록을 넣는다. 어느 단계든 오류가 나면 함수 호출 전체가 롤백된다. 저장된 `fetched_at`보다 오래되거나 같은 요청은 변경하지 않는다. |
+| `read_box_office_period` | 유형·기준일·스키마 버전·옵션 키로 기간과 영화·실적을 한 번에 읽고 `numeric(30,0)`을 정수 문자열로 돌려준다. 저장본이 없으면 `null`이다. |
+
+캐시 키는 `(schema_version=1, period_type, query_date, options_key)`이며 현재 `options_key`는 `itemPerPage=10;multiMovieYn=all;repNationCd=all;wideAreaCd=all`이다. 정상 데이터는 **24시간**, 정상 빈 목록은 **1시간** 유효하다. 저장 RPC가 `expires_at`을 계산한다. 새 결과가 정상 빈 목록이면 기존 실적도 0행으로 교체한다. 저장 실패나 KOBIS 오류로 만료 시각을 연장하지 않는다. DB의 같은 키 잠금과 시각 비교가 저장 순서 역전을 막는다. 다중 서버의 **외부 호출 자체**를 하나로 합치는 분산 갱신 임대는 아직 없으므로 배포 전 호출 제한과 함께 추가 검증해야 한다.
+
+| 상황 | 내부 응답·화면 안내 |
+| --- | --- |
+| 유효 캐시 | `200`, `source: cache`. 외부 호출 없이 저장된 결과와 마지막 성공 시각 표시 |
+| 캐시 없음·만료 | KOBIS 조회·검증 → 저장 RPC → 읽기 RPC 대조. 성공 시 첫 요청은 `source: kobis`, 다음 요청은 `source: cache` |
+| DB 읽기 실패 | KOBIS를 직접 조회해 `source: kobis`와 읽기 실패 경고 표시. KOBIS도 실패하면 `503 DB_AND_KOBIS_UNAVAILABLE` |
+| DB 저장·저장본 대조 실패 | 검증된 KOBIS 결과를 `200/source: kobis`와 저장 실패 경고로 반환. 기존 정상 저장본은 트랜잭션으로 보호 |
+| KOBIS 실패 + 만료 후 24시간 이내의 비어 있지 않은 캐시 | `200/partial`, `source: stale`. 마지막 성공 시각·갱신 실패 표시. 기존 만료 시각 유지 |
+| KOBIS 실패 + 사용 가능한 캐시 없음 | 기존 502/504 오류와 재시도. 정상 빈 캐시는 stale로 제공하지 않음 |
+
+저장 후 읽기 결과가 원본과 일치하면 검증용 **정규화 원본 응답**을 `.data/boxoffice-originals/`에 따로 기록한다. 이 로컬 기록은 서비스 응답의 기준이 아니고 Git에서도 제외된다. 서버리스 배포에서는 로컬 파일이 인스턴스 사이에 공유되거나 오래 보존되지 않으므로 `verify:data`의 첫 비교는 같은 로컬 환경에서 저장한 자료에만 가능하다. 영구적인 배포 후 검증에는 별도 외부 감사 저장소가 필요하지만, 업무 테이블과 중복 원본 캐시로 운영하지 않는다.
+
+### 설정 순서
+
+1. [Supabase 프로젝트를 준비](https://supabase.com/docs/guides/getting-started)한다. 개발·검증용 프로젝트를 먼저 사용한다.
+2. 위 migration SQL을 검토해 적용한다. 버전 관리에는 [Supabase migration 절차](https://supabase.com/docs/guides/deployment/database-migrations)를 사용한다. 초기 1회 수동 적용이라면 SQL Editor에서 전체 파일을 실행하고 이후 migration 이력과 중복 실행하지 않는다.
+3. `.gitignore`에서 `.env.local` 제외를 확인하고, `.env.local`의 **`SUPABASE_URL`**, **`SUPABASE_SECRET_KEY`**를 설정한다. `KOBIS_API_KEY`와 `DATA_MODE=live`도 서버에서 읽는다. 실제 값은 화면·문서·로그·Git에 넣지 않는다. [Supabase secret key 안내](https://supabase.com/docs/guides/getting-started/api-keys)
+4. 개발 서버를 재시작한 뒤 같은 날짜·유형을 두 번 조회한다. 첫 응답의 `meta.source=kobis`, 둘째 응답의 `meta.source=cache`를 확인한다. `2026-09-06` 일간을 예시로 쓸 수 있다. 기존 저장본이 있으면 첫 요청부터 cache일 수 있으므로 새 날짜를 쓰거나 만료를 기다린다.
+5. `npm run verify:data -- --date=2026-09-06 --period=daily`를 실행한다. 명령은 DB **읽기 RPC만** 호출하고, 로컬 원본 기록과 KOBIS에 **한 번 새로 조회한 결과**를 각각 비교한다. `0`은 두 비교 모두 일치, `1`은 불일치·비교 불가, `2`는 DB에 해당 기간이 없다는 뜻이다. KOBIS가 과거 실적을 정정하면 현재 결과와 저장 당시 원본이 달라 `1`이 정상적으로 나올 수 있다.
+
+설정 후 확인 결과(2026-10-25): `2026-09-04` 일간의 첫 조회는 `source: kobis` 10건, 같은 요청의 두 번째 조회는 `source: cache` 10건이었다. `verify:data`에서 저장본 ↔ 저장 당시 원본, 저장본 ↔ 현재 KOBIS가 모두 일치해 종료 코드 `0`을 확인했다. `2026-09-06`은 초기 저장본 대조 구현의 키 순서 오류로 로컬 원본 기록이 남지 않아 첫 비교를 수행할 수 없다. 필드별 비교로 수정한 뒤 새 날짜에서 재검증했다. SQL의 RLS 공개 접근 차단과 중간 실패 시 롤백은 격리 DB에서 별도 확인해야 한다. demo의 2026-09-06은 빈 fixture, live의 같은 날짜는 저장된 실제 10건으로 확인했다.
