@@ -10,3 +10,7 @@ export function getServerEnvironment() {
   }
   return { kobisApiKey, supabaseUrl, supabaseSecretKey };
 }
+
+export function getKobisApiKey(): string | null {
+  return process.env.KOBIS_API_KEY?.trim() || null;
+}

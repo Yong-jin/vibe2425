@@ -4,7 +4,7 @@ export type MovieResult = {
   movieCd: string;
   movieNm: string;
   openDt: string | null;
-  rank: number;
+  rank: number | null;
   salesAmt: string | null;
   audiCnt: string | null;
   salesAcc: string | null;
@@ -14,8 +14,8 @@ export type BoxofficeResult = {
   data: { items: MovieResult[] };
   meta: {
     status: "ok" | "empty";
-    mode: "demo";
-    source: "fixture";
+    mode: "demo" | "live";
+    source: "fixture" | "kobis";
     queryDate: string;
     periodType: PeriodType;
     periodStart: string;
@@ -41,6 +41,10 @@ export function koreaToday(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
   }).format(now);
+}
+
+export function koreaYesterday(): string {
+  return koreaToday(new Date(Date.now() - 86400000));
 }
 
 export function isValidDate(value: string): boolean {

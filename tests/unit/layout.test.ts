@@ -3,7 +3,7 @@ import { formatInteger, isValidDate, validatedInteger } from "../../src/lib/boxo
 import { getDemoBoxoffice } from "../../src/lib/server/demo-fixture";
 import { serveBoxoffice } from "../../src/lib/server/boxoffice-service";
 
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 describe("demo fixture", () => {
   it("provides all seven days and ranks by sales", () => {
@@ -50,15 +50,16 @@ describe("numeric strings and dates", () => {
 });
 
 describe("server mode boundary", () => {
-  it("uses fixtures only and makes no outbound fetch calls, including live mode", async () => {
+  it("uses fixtures only in demo mode and rejects live mode without a configured key", async () => {
     vi.useFakeTimers();
+    vi.stubEnv("KOBIS_API_KEY", "");
     const outbound = vi.fn(() => { throw new Error("Outbound calls prohibited"); });
     vi.stubGlobal("fetch", outbound);
     const params = new URLSearchParams({ date: "2026-09-13", type: "daily" });
     const pending = serveBoxoffice(params, "demo");
     await vi.runAllTimersAsync();
     expect((await pending).body.meta.status).toBe("ok");
-    expect((await serveBoxoffice(params, "live")).code).toBe(501);
+    expect((await serveBoxoffice(params, "live")).code).toBe(503);
     expect((await serveBoxoffice(params, "invalid")).code).toBe(500);
     expect(outbound).not.toHaveBeenCalled();
   });

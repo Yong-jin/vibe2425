@@ -4,7 +4,7 @@
 
 ## 1. 현재 위치와 결정 기준
 
-Next.js(App Router)·TypeScript 실행 뼈대와 Vitest·Playwright가 있고, F1 목록 화면은 `DATA_MODE=demo`에서 2026-09-07~13 가상 데이터로 동작한다. `DATA_MODE=live`는 현재 501을 반환한다. F2는 준비 화면이며 실제 KOBIS 호출·Supabase 저장·공유 캐시는 없다. 이 문서는 **다음 구현의 목표 계약**을 정의한다. 아래 `data / meta` 형식은 현재 demo의 평면 응답 형식에서 변경해야 한다.
+Next.js(App Router)·TypeScript 실행 뼈대와 Vitest·Playwright가 있고, F1 목록 화면은 `DATA_MODE=demo`에서 2026-09-07~13 가상 데이터로 동작한다. `DATA_MODE=live`는 KOBIS 직접 호출·검증·응답까지 구현했다. F2는 준비 화면이며 Supabase 저장·공유 캐시는 없다. 이 문서는 **다음 구현의 목표 계약**을 정의한다. F1의 `data / meta` 형식은 두 모드에 적용되었다.
 
 - 제품 동작과 완료 판정은 PRD의 AC를 우선한다. 캐시·오류 흐름은 ARCHITECTURE.md를 따른다.
 - 저장 방식은 PLAN.md에서 채택한 **영화·조회 기간·기간별 실적 세 테이블**을 단일 데이터 기준으로 삼는다. 구현 전에 ARCHITECTURE.md의 `boxoffice_cache.payload` 설계와 AGENTS.md의 ‘정규화 대안’ 표현을 갱신한다. 독립적인 JSONB 원본 캐시를 함께 만들지 않는다.
@@ -58,7 +58,6 @@ Next.js(App Router)·TypeScript 실행 뼈대와 Vitest·Playwright가 있고, F
 | 502 | KOBIS 오류 응답·인증 실패·구조 오류 또는 네트워크 실패, 대체 캐시 없음 | 조회 오류와 재시도. 인증 상세·키 비노출 |
 | 504 | KOBIS 요청 또는 전체 요청 시간 초과, 대체 캐시 없음 | 시간 초과 안내와 재시도 |
 | 503 | 서버 설정 누락, DB 장애로 조회 불가하며 외부 직접 조회도 불가, 갱신 임대 대기 상한 초과 | 일시 이용 불가 안내·재시도 |
-| 501 | `DATA_MODE=live`를 구현하기 전의 기존 demo 단계에 한함 | 미구현 안내. live 구현 완료 후 제거 |
 
 F2는 일부 날짜만 실패해도 나머지 날짜를 계산할 수 있으면 200/partial이다. **모든 날짜가 정상 빈 응답**일 때만 200/empty이고, **모든 날짜가 실패**하면 적절한 502/503/504를 반환한다. 빈 날과 실패 날만 섞였으면 200/partial이며 `summary` 값은 `null`이다. 응답에 BigInt를 직접 넣지 않는다.
 
@@ -99,7 +98,7 @@ stale 대체는 **만료 후 24시간 이내의 마지막 정상·비어 있지 
 | --- | --- | --- |
 | 기반 | Next.js App Router·TypeScript, Node 22 지정, `dev/build/lint/typecheck/test/test:e2e`, 비밀값 없는 `.env.example` | AGENTS.md 명령 표·PLAN 진행 현황 갱신, 배포 환경 규칙 확정 |
 | F1 화면 | 가상 영화 3편·7일, 일간/주간/주말 필터, 현재 목록 검색, 표·로딩·성공·empty·검색 결과 없음·오류 시나리오 | live 전일 초기값, 실제 KOBIS 기간·조회 시각·stale·품질 경고 표시, API 응답 계약 변경 반영 |
-| F1 내부 API | `/api/boxoffice`의 demo 입력 검증, fixture 정수 문자열·BigInt 합산, 200 empty·400·시뮬레이션 503 | live 어댑터, 502/504/429, 캐시·저장·대조, `data/meta` 계약. demo 전용 `scenario` 파라미터는 live에서 거부 |
+| F1 내부 API | `/api/boxoffice`의 demo 입력 검증·fixture 집계와 live KOBIS 일간·주간·주말 직접 호출·검증, 200 empty·400·502·503·504, `data/meta` 계약. demo 전용 `scenario` 파라미터는 live에서 거부 | 429 호출 제한, 캐시·저장·저장본 대조 |
 | F2 | 준비 화면 | `/api/insights`, 추이·Top·보조 지표, 결측·부분 집계·전체 빈 결과·오류 화면 |
 | DB·운영 | 비밀키를 늦게 읽는 서버 전용 환경 모듈, `.env.local` Git 제외 | Supabase 세 테이블·RPC·RLS, 서버 호출 제한·갱신 임대·TTL, 키 비노출 검증·운영 관측 |
 | 검증 | demo 단위·Chromium 화면 테스트와 스크립트 | 실제 KOBIS 계약·격리 DB·캐시 분기·30일 부분 실패·AC 1~15·배포 URL 검증 |
